@@ -1,4 +1,4 @@
-# 🔭 Explorative analysis using laggedcor package
+# 🔭 Explorative analysis using laggedcor package for Multiomics Data
 
 ## Goal
 
