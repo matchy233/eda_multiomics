@@ -3,9 +3,13 @@ output:
   pdf_document: default
   html_document: default
 ---
-# Test 
+# Test `laggedcor`, `ccf`, and `ccf_boost` on generated data
 
-```{r import_laggedcor}
+```{r setup, include=FALSE} 
+knitr::opts_chunk$set(warning = FALSE, message = FALSE) 
+```
+
+```{r import_laggedcor, result=FALSE}
 # installed using renv::install("matchy233/laggedcor@develop")
 library(laggedcor)
 ```
@@ -81,19 +85,36 @@ ggplot(df, aes(x = timestamp)) +
 
 ```{r calculate_lag}
 # Calculate CCF
+start_time <- Sys.time()
 ccf_result <- ccf(ts1, ts2, lag.max = 60, plot = TRUE)  # Check up to 60 minutes lag
+end_time <- Sys.time()
+end_time - start_time
+```
+
+```{r get_calculated_lag}
 max_lag <- which.max(abs(ccf_result$acf))
 detected_lag <- ccf_result$lag[max_lag]
+detected_lag
 ```
 
 ```{r use_ccf_to_calculate}
-ccf_boot(
+start_time <- Sys.time()
+ccf_boot_res <- ccf_boot(
   x = df$series1,
   y = df$series2,
   lag.max = 60,
   plot = "Spearman"
 )
+end_time <- Sys.time()
+end_time - start_time
 ```
+
+```{r get_max_lag_ccf_boot}
+max_lag_boot <- which.max(abs(ccf_boot_res$r_S))
+detected_lag_boot <- ccf_boot_res$Lag[max_lag]
+detected_lag_boot
+```
+
 ```{r test_laggedcor}
 start_time <- Sys.time()
 # Use laggedcor package to detect lag
@@ -122,8 +143,14 @@ lagged_alignment_plot(
 )
 ```
 
-```{r print_results}
-cat("\nTrue lag:", lag_minutes, "minutes")
-cat("\nDetected lag:", detected_lag, "minutes")
-cat("\nCorrelation at detected lag:", ccf_result$acf[max_lag])
+```{r}
+shift_time <- extract_shift_time(laggedcor_result, numeric = TRUE)[which.max(extract_all_cor(laggedcor_result))]
 ```
+
+
+- True lag: `r -lag_minutes` minutes
+- Detected lag via `ccf`: `r detected_lag` minutes
+  - Correlation (Pearson) at detected lag: `r ccf_result$acf[max_lag]`.
+- Detected lag via `ccf_boot`: `r detected_lag_boot` minutes
+  - Correlation (Spearman) at detected lag: `r ccf_boot_res$r_S[max_lag]`
+- Detected lag via `laggedcor`: `r shift_time` minutes
