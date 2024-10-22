@@ -10,3 +10,7 @@
 
 1. Notebooks for interactive data analysis, R markdown or Jupyter notebook
 2. Training code for models used in `laggedcor`
+
+## Link
+
+- [Paper](https://www.nature.com/articles/s41551-022-00999-8)

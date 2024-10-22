@@ -1,0 +1,129 @@
+---
+output:
+  pdf_document: default
+  html_document: default
+---
+# Test 
+
+```{r import_laggedcor}
+# installed using renv::install("matchy233/laggedcor@develop")
+library(laggedcor)
+```
+
+```{r import_other_packages}
+library(lubridate)
+library(dplyr)
+library(ggplot2)
+library(funtimes)
+```
+
+```{r set_seed}
+# Set random seed for reproducibility
+set.seed(123)
+```
+
+```{r generate_data}
+# Generate time series parameters
+n_hours <- 24  # 24 hours of data
+freq <- 1/60   # One observation per minute
+n <- n_hours * 60  # Total number of observations
+lag_minutes <- 10  # Lag in minutes
+
+# Generate time sequence
+time_seq <- seq(
+  from = ymd_hms("2024-01-01 00:00:00"),
+  by = sprintf("%d sec", 60),  # One minute intervals
+  length.out = n
+)
+
+# Generate base signal (combination of sine waves for complexity)
+base_signal <- sin(2 * pi * seq_len(n + lag_minutes) / (60 * 4)) +  # 4-hour cycle
+               0.5 * sin(2 * pi * seq_len(n + lag_minutes) / (60 * 1)) +  # 1-hour cycle
+               0.3 * sin(2 * pi * seq_len(n + lag_minutes) / (60 * 12))   # 12-hour cycle
+
+# Add different types of noise
+generate_noise <- function(n, sd = 0.1) {
+  # Combine white noise and random walk
+  white_noise <- rnorm(n, mean = 0, sd = sd)
+  random_walk <- cumsum(rnorm(n, mean = 0, sd = sd/5))
+  # Normalize random walk
+  random_walk <- random_walk * (sd / sd(random_walk))
+  return(white_noise + random_walk)
+}
+
+# Create the two time series with lag
+ts1 <- base_signal + generate_noise(n + lag_minutes, sd = 0.2)
+ts1 <- ts1[(lag_minutes + 1):(n + lag_minutes)]
+ts2 <- base_signal[1:(n-lag_minutes)] + generate_noise(n, sd = 0.2)
+
+
+
+# Create data frame
+df <- data.frame(
+  timestamp = time_seq,
+  series1 = ts1,
+  series2 = ts2
+)
+```
+
+```{r plot_data}
+# Plot the time series
+ggplot(df, aes(x = timestamp)) +
+  geom_line(aes(y = series1, color = "Series 1")) +
+  geom_line(aes(y = series2, color = "Series 2")) +
+  labs(title = "Simulated Time Series with 10-minute Lag",
+       x = "Time",
+       y = "Value",
+       color = "Series") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+```{r calculate_lag}
+# Calculate CCF
+ccf_result <- ccf(ts1, ts2, lag.max = 60, plot = TRUE)  # Check up to 60 minutes lag
+max_lag <- which.max(abs(ccf_result$acf))
+detected_lag <- ccf_result$lag[max_lag]
+```
+
+```{r use_ccf_to_calculate}
+ccf_boot(
+  x = df$series1,
+  y = df$series2,
+  lag.max = 60,
+  plot = "Spearman"
+)
+```
+```{r test_laggedcor}
+start_time <- Sys.time()
+# Use laggedcor package to detect lag
+laggedcor_result <- calculate_lagged_correlation(
+  x = df$series1,
+  y = df$series2,
+  time1 = df$timestamp,
+  time2 = df$timestamp,
+  time_tol = 1,
+  step = 1 / 60,
+  min_matched_sample = 10,
+  threads = 16
+)
+end_time <- Sys.time()
+end_time - start_time
+```
+
+
+```{r plot}
+evaluate_lagged_cor(object = laggedcor_result, plot = TRUE)
+```
+
+```{r print_stats}
+lagged_alignment_plot(
+  laggedcor_result, which = "max"
+)
+```
+
+```{r print_results}
+cat("\nTrue lag:", lag_minutes, "minutes")
+cat("\nDetected lag:", detected_lag, "minutes")
+cat("\nCorrelation at detected lag:", ccf_result$acf[max_lag])
+```
